@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Atlas 8M – Geochicas (Dashboard)</title>
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    :root{
+      --bg:#0f1115;
+      --card:#151923;
+      --text:#e9eef7;
+      --muted:#a9b3c7;
+      --border:rgba(255,255,255,.08);
+      --radius:14px;
+
+      /* Paleta Geochicas */
+      --c1:#381737;
+      --c2:#7B2355;
+      --c3:#2B525D;
+      --c4:#4A88B7;
+      --c5:#F2CC69;
+    }
+    body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans",sans-serif;background:var(--bg);color:var(--text);}
+    header{padding:18px 18px 10px;border-bottom:1px solid var(--border);}
+    h1{margin:0 0 6px;font-size:18px;font-weight:750;}
+    .sub{margin:0;color:var(--muted);font-size:13px;line-height:1.35;}
+    .wrap{padding:14px 18px 20px;max-width:1200px;margin:0 auto;}
+    .controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0 14px;}
+    .control{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;}
+    select{width:100%;padding:10px 10px;border-radius:10px;border:1px solid var(--border);background:#0f1320;color:var(--text);outline:none;}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;min-height:280px;}
+    .card h2{font-size:14px;margin:2px 0 10px;color:var(--text);}
+    .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4;}
+    .footer{margin-top:14px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:12px;}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0 12px;}
+    .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;}
+    .kpi .val{font-size:20px;font-weight:800;}
+    .kpi .lab{font-size:12px;color:var(--muted);margin-top:2px;}
+    
+    .brand{display:flex;align-items:center;gap:12px;}
+    .brand img{height:30px;width:auto;display:block;}
+    .brand .titlewrap{display:flex;flex-direction:column;gap:2px;}
+    .leaflet-container{background:rgba(0,0,0,0);border-radius:var(--radius);font-family:inherit;}
+    .leaflet-popup-content-wrapper{border-radius:14px;background:#ffffff;box-shadow:0 14px 40px rgba(0,0,0,.25);}
+    .leaflet-popup-content{margin:12px 14px;width:220px;}
+    .popup-title{font-weight:800;font-size:16px;margin:0 0 6px;}
+    .popup-meta{color:#3a3f4b;font-size:12px;line-height:1.35;margin:0 0 8px;}
+    .popup-meta b{color:#111;}
+    .popup-img{width:100%;height:auto;border-radius:10px;border:1px solid rgba(0,0,0,.08);display:block;}
+    .popup-links{margin-top:8px;font-size:12px;}
+    .popup-links a{color:#2B525D;text-decoration:none;font-weight:700;}
+    .popup-links a:hover{text-decoration:underline;}
+@media (max-width:900px){.controls{grid-template-columns:1fr;}.grid{grid-template-columns:1fr;}.kpis{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">
+        <img src="./assets/geochicas-logo.png" alt="Geochicas" />
+        <div class="titlewrap">
+          <h1>Atlas 8M – Dashboard exploratorio</h1>
+        </div>
+      </div>
+
+    <p class="sub">
+      Dashboard estático para GitHub Pages. Los temas pueden venir del CSV (ideal) o inferirse por OCR (opcional) desde imagen_url.
+    </p>
+
+    <div class="controls">
+      <div class="control">
+        <label for="yearSel">Año</label>
+        <select id="yearSel"></select>
+      </div>
+      <div class="control">
+        <label for="themeSel">Tema</label>
+        <select id="themeSel"></select>
+      </div>
+      <div class="control">
+        <label for="countrySel">País</label>
+        <select id="countrySel"></select>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="val" id="kpiTotal">–</div>
+        <div class="lab">Acciones (según filtros)</div>
+      </div>
+      <div class="kpi">
+        <div class="val" id="kpiCountries">–</div>
+        <div class="lab">Países con acciones</div>
+      </div>
+      <div class="kpi">
+        <div class="val" id="kpiThemes">–</div>
+        <div class="lab">Temas presentes</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h2>Hallazgos (automáticos)</h2>
+      <div class="note" id="hallNote">–</div>
+      <div id="hall" style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:10px;"></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="card">
+      <h2>Mapa (puntos)</h2>
+      <div id="map" style="height:520px;"></div>
+      <div class="note">
+        Popup incluye: <b>año</b>, <b>organización</b> e <b>imagen</b> (si existe).
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Evolución por año</h2>
+      <div id="series" style="height:260px;"></div>
+      <h2 style="margin-top:12px;">Top países (según filtros)</h2>
+      <div id="topCountries" style="height:240px;"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <h2>Temas por año (participación)</h2>
+    <div id="themes" style="height:360px;"></div>
+    <div class="note">
+      “Sin tema detectado” no significa “sin tema”; significa “sin clasificación disponible”.
+    </div>
+  </div>
+
+  <div class="footer">
+    Generado automáticamente: <span id="genAt">–</span>.
+  </div>
+</div>
+
+<script>
+const PALETTE = ["#381737","#7B2355","#2B525D","#4A88B7","#F2CC69"];
+
+const THEME_LABELS = {
+  "cuidados_y_trabajo": "Cuidados y trabajo",
+  "violencias": "Violencias",
+  "antirracismo": "Antirracismo",
+  "lgbtiq": "LGBTIQ+",
+  "feminicidios": "Feminicidios / femicidios",
+  "derechos_digitales": "Derechos digitales",
+  "sin_tema_detectado": "Sin tema detectado"
+};
+
+function uniq(arr){ return Array.from(new Set(arr)); }
+function byId(id){ return document.getElementById(id); }
+function niceTheme(t){ return THEME_LABELS[t] || t; }
+
+function filterPoints(points, year, theme, country){
+  return points.filter(p => {
+    const okYear = (year === "Todos") || (String(p.anio) === String(year));
+    const okCountry = (country === "Todos") || ((p.pais_dash || "Sin país (pendiente)") === country);
+    const ts = p.themes || [];
+    const okTheme = (theme === "Todos") || (ts.includes(theme) || (theme==="sin_tema_detectado" && ts.length===0));
+    return okYear && okTheme && okCountry;
+  });
+}
+
+function computeKPIs(pointsFiltered){
+  const total = pointsFiltered.length;
+  const countries = uniq(pointsFiltered.map(p => (p.pais_dash || "Sin país (pendiente)")));
+  const themes = uniq(pointsFiltered.flatMap(p => (p.themes && p.themes.length ? p.themes : ["sin_tema_detectado"])));
+  return { total, countries: countries.length, themes: themes.length };
+}
+
+
+let _leafletMap = null;
+let _leafletLayer = null;
+
+function initLeafletIfNeeded(){
+  if (_leafletMap) return;
+  _leafletMap = L.map("map", { worldCopyJump:true, zoomControl:true }).setView([10,-20],2);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    maxZoom:18,
+    attribution:'&copy; OpenStreetMap contributors'
+  }).addTo(_leafletMap);
+
+  _leafletLayer = L.layerGroup().addTo(_leafletMap);
+}
+
+function popupHTML(p){
+  const country = p.pais_dash || "Sin país";
+  const year = (p.anio ?? "—");
+  const place = [p.ciudad, p.estado].filter(Boolean).join(", ");
+  const org = p.organizacion || "";
+  const themes = (p.themes && p.themes.length) ? p.themes.map(niceTheme).join(", ") : niceTheme("sin_tema_detectado");
+
+  const parts = [];
+  parts.push(`<div class="popup-title">${country}</div>`);
+  parts.push(`<div class="popup-meta">${place ? (place + " · ") : ""}<b>${year}</b></div>`);
+  if (org) parts.push(`<div class="popup-meta"><b>Colectiva/Org:</b> ${org}</div>`);
+  parts.push(`<div class="popup-meta"><b>Temas:</b> ${themes}</div>`);
+
+  if (p.imagen_url){
+    parts.push(`<img class="popup-img" src="${p.imagen_url}" alt="Afiche" loading="lazy" />`);
+  }
+
+  const links = [];
+  if (p.convocatoria_url) links.push(`<a href="${p.convocatoria_url}" target="_blank" rel="noopener">Convocatoria</a>`);
+  if (p.publicacion_url) links.push(`<a href="${p.publicacion_url}" target="_blank" rel="noopener">Publicación</a>`);
+  if (links.length) parts.push(`<div class="popup-links">${links.join(" · ")}</div>`);
+
+  return parts.join("");
+}
+
+function renderMap(pointsFiltered){
+  initLeafletIfNeeded();
+  _leafletLayer.clearLayers();
+
+  const markerColor = PALETTE[1]; // magenta
+  pointsFiltered.forEach(p=>{
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+    const m = L.circleMarker([p.lat,p.lon],{
+      radius:4,
+      stroke:false,
+      fillColor: markerColor,
+      fillOpacity:0.65
+    });
+    m.bindPopup(popupHTML(p), {maxWidth:260});
+    m.addTo(_leafletLayer);
+  });
+}
+
+function renderSeries(pointsAll, theme, country){
+  const pts = filterPoints(pointsAll, "Todos", theme, country);
+  const byYear = new Map();
+  pts.forEach(p => {
+    const y = String(p.anio);
+    byYear.set(y, (byYear.get(y)||0)+1);
+  });
+  const xs = Array.from(byYear.keys()).sort();
+  const ys = xs.map(x => byYear.get(x));
+
+  const trace = { type:"scatter", mode:"lines+markers", x:xs, y:ys, line:{color:PALETTE[4]}, marker:{color:PALETTE[4]} };
+  const layout = {
+    margin:{l:40,r:10,t:10,b:35},
+    xaxis:{title:"Año", gridcolor:"rgba(255,255,255,.06)"},
+    yaxis:{title:"Acciones", gridcolor:"rgba(255,255,255,.06)"},
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    font:{color:"rgba(233,238,247,.95)"}
+  };
+  Plotly.react("series",[trace],layout,{displayModeBar:false,responsive:true});
+}
+
+function renderTopCountries(pointsAll, year, theme, country){
+  const pts = filterPoints(pointsAll, year, theme, "Todos");
+  const counts = new Map();
+  pts.forEach(p => {
+    const c = p.pais_dash || "Sin país (pendiente)";
+    counts.set(c,(counts.get(c)||0)+1);
+  });
+
+  // Si hay país seleccionado, mostrar top ciudades
+  if (country !== "Todos"){
+    const pts2 = filterPoints(pointsAll, year, theme, country);
+    const cc = new Map();
+    pts2.forEach(p => {
+      const k = p.ciudad || "Sin ciudad";
+      cc.set(k,(cc.get(k)||0)+1);
+    });
+    const items = Array.from(cc.entries()).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const x = items.map(i=>i[1]).reverse();
+    const y = items.map(i=>i[0]).reverse();
+    const trace = {type:"bar", orientation:"h", x, y, marker:{color:PALETTE[2]}};
+    const layout = {
+      margin:{l:120,r:10,t:10,b:35},
+      xaxis:{title:"Acciones", gridcolor:"rgba(255,255,255,.06)"},
+      yaxis:{title:"Ciudad", gridcolor:"rgba(255,255,255,.06)"},
+      paper_bgcolor:"rgba(0,0,0,0)",
+      plot_bgcolor:"rgba(0,0,0,0)",
+      font:{color:"rgba(233,238,247,.95)"}
+    };
+    Plotly.react("topCountries",[trace],layout,{displayModeBar:false,responsive:true});
+    return;
+  }
+
+  const items = Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const x = items.map(i=>i[1]).reverse();
+  const y = items.map(i=>i[0]).reverse();
+  const trace = {type:"bar", orientation:"h", x, y, marker:{color:PALETTE[2]}};
+  const layout = {
+    margin:{l:140,r:10,t:10,b:35},
+    xaxis:{title:"Acciones", gridcolor:"rgba(255,255,255,.06)"},
+    yaxis:{title:"País", gridcolor:"rgba(255,255,255,.06)"},
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    font:{color:"rgba(233,238,247,.95)"}
+  };
+  Plotly.react("topCountries",[trace],layout,{displayModeBar:false,responsive:true});
+}
+
+function renderThemes(pointsAll, country){
+  const pts = filterPoints(pointsAll, "Todos", "Todos", country);
+  const years = uniq(pts.map(p=>String(p.anio))).sort();
+
+  const themeSet = new Set();
+  pts.forEach(p => {
+    const ts = (p.themes && p.themes.length) ? p.themes : ["sin_tema_detectado"];
+    ts.forEach(t => themeSet.add(t));
+  });
+  const themes = Array.from(themeSet.values()).sort();
+
+  const counts = {};
+  themes.forEach(t => counts[t] = {});
+  pts.forEach(p => {
+    const y=String(p.anio);
+    const ts=(p.themes && p.themes.length) ? p.themes : ["sin_tema_detectado"];
+    ts.forEach(t => { counts[t][y]=(counts[t][y]||0)+1; });
+  });
+
+  const traces = themes.map((t, idx) => {
+    const col = PALETTE[idx % PALETTE.length];
+    return { type:"bar", name:niceTheme(t), x:years, y:years.map(y => counts[t][y]||0), marker:{color:col} };
+  });
+
+  const layout = {
+    barmode:"stack",
+    margin:{l:50,r:10,t:10,b:40},
+    xaxis:{title:"Año", gridcolor:"rgba(255,255,255,.06)"},
+    yaxis:{title:"Acciones (conteo)", gridcolor:"rgba(255,255,255,.06)"},
+    legend:{orientation:"h", y:-0.25},
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    font:{color:"rgba(233,238,247,.95)"}
+  };
+  Plotly.react("themes",traces,layout,{displayModeBar:false,responsive:true});
+}
+
+function renderHallazgos(data){
+  const hall = byId("hall");
+  const note = byId("hallNote");
+  if (!data || !data.hallazgos) return;
+
+  note.textContent = (data.meta && data.meta.nota_temas) ? data.meta.nota_temas : "";
+  hall.innerHTML="";
+
+  function card(title, items, fmt){
+    const d=document.createElement("div");
+    d.className="control";
+    d.style.borderRadius="var(--radius)";
+    d.style.border="1px solid var(--border)";
+    d.style.background="var(--card)";
+    d.style.padding="10px";
+
+    const h=document.createElement("div");
+    h.style.fontWeight="800";
+    h.style.marginBottom="6px";
+    h.textContent=title;
+    d.appendChild(h);
+
+    const ul=document.createElement("div");
+    ul.style.fontSize="12px";
+    ul.style.color="var(--muted)";
+    if (!items || !items.length){ ul.textContent="(sin datos suficientes)"; }
+    else { ul.innerHTML = items.slice(0,10).map(fmt).join("<br>"); }
+    d.appendChild(ul);
+
+    hall.appendChild(d);
+  }
+
+  card("Temas más frecuentes (global)", data.hallazgos.top_themes,
+       it => `• ${niceTheme(it.theme || it.themes || it[0] || it)} — ${it.acciones ?? it.count ?? ""}`);
+  if (data.meta && data.meta.latest_year){
+    card(`Top países en ${data.meta.latest_year}`, data.hallazgos.top_countries_latest,
+         it => `• ${it.pais_dash} — ${it.acciones}`);
+  }
+  if (data.meta && data.meta.base_year && data.meta.latest_year){
+    card(`Crecimiento de acciones (${data.meta.base_year} → ${data.meta.latest_year})`, data.hallazgos.top_growth_since_base,
+         it => `• ${it.pais_dash} — ${it.delta >=0 ? "+"+it.delta : it.delta}`);
+    card(`Caída de acciones (${data.meta.base_year} → ${data.meta.latest_year})`, data.hallazgos.top_drop_since_base,
+         it => `• ${it.pais_dash} — ${it.delta >=0 ? "+"+it.delta : it.delta}`);
+  }
+}
+
+async function main(){
+  const resp = await fetch("./geochicas_8m_dashboard_data.json");
+  if (!resp.ok) throw new Error("No se pudo cargar geochicas_8m_dashboard_data.json (HTTP "+resp.status+")");
+  const data = await resp.json();
+
+  byId("genAt").textContent = data.generated_at;
+  renderHallazgos(data);
+
+  const points = (data.points || []).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+
+  const years = uniq(points.map(p => String(p.anio))).sort();
+  const themes = uniq(points.flatMap(p => (p.themes && p.themes.length) ? p.themes : ["sin_tema_detectado"])).sort();
+  const countries = uniq(points.map(p => (p.pais_dash || "Sin país (pendiente)"))).sort();
+
+  const yearSel = byId("yearSel");
+  ["Todos", ...years].forEach(y => { const o=document.createElement("option"); o.value=y; o.textContent=y; yearSel.appendChild(o); });
+
+  const themeSel = byId("themeSel");
+  ["Todos", ...themes].forEach(t => { const o=document.createElement("option"); o.value=t; o.textContent=(t==="Todos")?t:niceTheme(t); themeSel.appendChild(o); });
+
+  const countrySel = byId("countrySel");
+  ["Todos", ...countries].forEach(c => { const o=document.createElement("option"); o.value=c; o.textContent=c; countrySel.appendChild(o); });
+
+  function rerender(){
+    const year = yearSel.value;
+    const theme = themeSel.value;
+    const country = countrySel.value;
+
+    const ptsFiltered = filterPoints(points, year, theme, country);
+    const k = computeKPIs(ptsFiltered);
+    byId("kpiTotal").textContent = k.total.toLocaleString("es-CR");
+    byId("kpiCountries").textContent = k.countries.toLocaleString("es-CR");
+    byId("kpiThemes").textContent = k.themes.toLocaleString("es-CR");
+
+    renderMap(ptsFiltered);
+    renderSeries(points, theme, country);
+    renderTopCountries(points, year, theme, country);
+    renderThemes(points, country);
+  }
+
+  yearSel.addEventListener("change", rerender);
+  themeSel.addEventListener("change", rerender);
+  countrySel.addEventListener("change", rerender);
+
+  rerender();
+}
+
+main().catch(e => { console.error(e); alert(e.message); });
+</script>
+</body>
+</html>
